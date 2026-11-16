@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hall of Fame — Admin Demo</title>
+<style>
+:root{--gold:#d9b45f;--gold2:#8f6827;--black:#101010;--panel:#171717;--muted:#b9aa88;--green:#176b32;--red:#8f2424}
+*{box-sizing:border-box}
+body{margin:0;background:#080808;color:#f5f0e5;font-family:Georgia,"Times New Roman",serif}
+.board{width:min(1100px,100%);margin:0 auto;padding:clamp(10px,2vw,22px);background:linear-gradient(145deg,#171717,#080808);border:3px solid var(--gold2);box-shadow:inset 0 0 0 2px #3b2a10,0 12px 40px #000}
+.display{border:2px solid var(--gold);border-radius:10px;background:radial-gradient(ellipse at top,#242424,#101010 65%);padding:clamp(9px,1.6vw,18px);min-height:480px;display:flex;flex-direction:column}
+.columns,.nominee{display:grid;grid-template-columns:minmax(125px,1.7fr) minmax(38px,.45fr) minmax(38px,.45fr) minmax(76px,.8fr) 62px 62px;gap:7px;align-items:center}
+.columns{color:var(--gold);font-size:clamp(10px,1.25vw,14px);text-transform:uppercase;letter-spacing:.06em;padding:0 8px 10px;border-bottom:1px solid #705526}
+.rows{flex:1;overflow-y:auto;max-height:410px;padding:4px;scrollbar-color:var(--gold2) #171717}
+.nominee{padding:10px 8px;border-bottom:1px solid #4b3a1b;min-height:51px;font-family:Arial,sans-serif;font-size:clamp(11px,1.35vw,15px)}
+.nominee:nth-child(even){background:#ffffff08}
+.name{font-weight:700;color:#f4e4bd;overflow-wrap:anywhere}
+.stat{text-align:center;color:#e8dfce;font-variant-numeric:tabular-nums}
+.approval{text-align:center;color:var(--gold);font-weight:700}
+.vote{border:1px solid #d6bd83;border-radius:5px;padding:8px 2px;color:white;font-weight:700;cursor:pointer;background:var(--green);font-size:12px}
+.vote.no{background:var(--red)}button:disabled{opacity:.35;cursor:not-allowed}
+.status{color:#c8b98f;font-size:10px;margin-top:3px;font-weight:400}
+.empty{margin:auto;text-align:center;color:var(--muted);padding:35px 10px}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:12px}
+.control,.action{min-height:48px;border:2px solid var(--gold);border-radius:8px;background:linear-gradient(#30240f,#100d08);color:#f2d58f;font:700 clamp(12px,1.7vw,18px) Georgia,serif;cursor:pointer;box-shadow:inset 0 0 0 2px #5a421d;padding:8px}
+.pageinfo{text-align:center;color:var(--muted);font:12px Arial,sans-serif;margin-top:8px}
+.note{text-align:center;color:#9f947c;font:10px Arial,sans-serif;margin:10px 0 0}
+.panel{border:1px solid var(--gold2);border-radius:8px;background:#111;padding:14px;margin:auto;width:100%;max-width:700px}
+.panel h2{color:var(--gold);text-align:center;margin:0 0 12px;font-size:clamp(19px,3vw,27px)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.action{font-size:14px;min-height:44px}
+.action.danger{border-color:#9d4444;color:#ffd0c7;background:linear-gradient(#421b1b,#180909)}
+.action.back{grid-column:1/-1}
+.field{width:100%;padding:11px;border:1px solid #8f6827;border-radius:5px;background:#080808;color:#fff;font-size:16px;margin:6px 0 10px}
+.help{color:#c7b994;font:12px Arial,sans-serif;line-height:1.45;text-align:center;margin:8px 0}
+.resultline{display:flex;justify-content:space-between;gap:12px;padding:8px;border-bottom:1px solid #4b3a1b;font:13px Arial,sans-serif}
+@media(max-width:560px){.columns,.nominee{grid-template-columns:minmax(88px,1.4fr) 30px 30px 55px 48px 48px;gap:3px}.nominee{padding:8px 3px}.vote{font-size:10px}.actions{grid-template-columns:1fr}.action.back{grid-column:auto}.display{min-height:420px}}
+</style>
+</head>
+<body>
+<main class="board">
+<section class="display" id="display" aria-label="Hall of Fame voting display"></section>
+<div class="pageinfo" id="pageinfo"></div>
+<p class="note">Interface preview only. Real avatar verification, group checks, voting records and administrator permissions must be provided by the Second Life LSL system.</p>
+</main>
+<script>
+const PAGE_SIZE=10;
+let page=0, votingOpen=true, view='list';
+let nominees=Array.from({length:13},(_,i)=>({id:i+1,name:`Sample Nominee ${i+1}`,yes:0,no:0,voted:false,inducted:false}));
+const display=document.getElementById('display');
+const pageinfo=document.getElementById('pageinfo');
+function el(tag,cls,txt){const x=document.createElement(tag);if(cls)x.className=cls;if(txt!==undefined)x.textContent=txt;return x}
+function render(){
+ display.innerHTML='';
+ if(view==='admin'){renderAdmin();return}
+ if(view==='add'){renderAdd();return}
+ if(view==='remove'){renderRemove();return}
+ if(view==='results'){renderResults();return}
+ renderList();
+}
+function renderList(){
+ const head=el('div','columns');['Nominee','Yes','No','Approval','',''].forEach((t,i)=>{const d=el('div','',t);if(i>0)d.style.textAlign='center';head.appendChild(d)});display.appendChild(head);
+ const rows=el('div','rows');display.appendChild(rows);
+ const active=nominees.filter(n=>!n.inducted),pages=Math.max(1,Math.ceil(active.length/PAGE_SIZE));page=Math.min(page,pages-1);
+ const visible=active.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
+ if(!visible.length)rows.appendChild(el('div','empty','No active nominees. Open ADMIN to add one.'));
+ visible.forEach(n=>{
+  const total=n.yes+n.no,pct=total?Math.round(n.yes/total*100):0,row=el('div','nominee');
+  const name=el('div','name',n.name);if(n.voted)name.appendChild(el('div','status','Demo vote recorded'));
+  row.append(name,el('div','stat',n.yes),el('div','stat',n.no),el('div','approval',pct+'%'));
+  const y=el('button','vote','YES'),no=el('button','vote no','NO');y.disabled=no.disabled=!votingOpen||n.voted;
+  y.onclick=()=>cast(n,'yes');no.onclick=()=>cast(n,'no');row.append(y,no);rows.appendChild(row);
+ });
+ const nav=el('div','controls');const prev=el('button','control','◀ PREVIOUS'),admin=el('button','control','ADMIN'),next=el('button','control','NEXT ▶');
+ prev.disabled=page===0;next.disabled=page>=pages-1;prev.onclick=()=>{page--;render()};next.onclick=()=>{page++;render()};admin.onclick=()=>{view='admin';render()};nav.append(prev,admin,next);display.appendChild(nav);
+ pageinfo.textContent=`Page ${page+1} of ${pages} · ${active.length} active nominees · Voting ${votingOpen?'OPEN':'CLOSED'}`;
+}
+function cast(n,c){if(!votingOpen||n.voted)return;n.voted=true;if(c==='yes')n.yes++;else n.no++;render()}
+function panel(title,help){display.appendChild(el('div','panel')).append(el('h2','',title),el('p','help',help))}
+function addAction(parent,label,fn,cls='action'){const b=el('button',cls,label);b.onclick=fn;parent.appendChild(b)}
+function back(){view='admin';render()}
+function renderAdmin(){
+ const p=el('div','panel');display.appendChild(p);p.append(el('h2','','ADMINISTRATION'),el('p','help','Demonstration menu only. In-world administrator authorization is not connected yet.'));
+ const a=el('div','actions');p.appendChild(a);
+ addAction(a,'ADD NOMINEE',()=>{view='add';render()});
+ addAction(a,'REMOVE NOMINEE',()=>{view='remove';render()});
+ addAction(a,'VIEW RESULTS',()=>{view='results';render()});
+ addAction(a,votingOpen?'CLOSE VOTING':'REOPEN VOTING',()=>{votingOpen=!votingOpen;render()});
+ addAction(a,'MARK INDUCTED',()=>{view='induct';renderInduct()});
+ addAction(a,'MANAGE ADMINS',()=>alert('Administrator management will be controlled by the board owner through LSL. It is intentionally not enabled in this HTML demo.'));
+ addAction(a,'BACK TO VOTING',()=>{view='list';render()},'action back');
+ pageinfo.textContent='Admin preview';
+}
+function renderAdd(){
+ const p=el('div','panel');display.appendChild(p);p.append(el('h2','','ADD NOMINEE'),el('p','help','Enter the nominee name, then add it to this local demonstration.'));
+ const input=el('input','field');input.placeholder='Nominee name';input.maxLength=60;p.appendChild(input);
+ const a=el('div','actions');p.appendChild(a);addAction(a,'ADD NOMINEE',()=>{const name=input.value.trim();if(!name){alert('Enter a nominee name first.');return}nominees.push({id:Date.now(),name,yes:0,no:0,voted:false,inducted:false});page=Math.floor((nominees.filter(n=>!n.inducted).length-1)/PAGE_SIZE);view='list';render()});
+ addAction(a,'CANCEL',back);pageinfo.textContent='Add nominee preview';
+}
+function renderRemove(){
+ const p=el('div','panel');display.appendChild(p);p.append(el('h2','','REMOVE NOMINEE'),el('p','help','Choose a nominee to remove from this demonstration list.'));
+ const a=el('div','actions');p.appendChild(a);nominees.filter(n=>!n.inducted).forEach(n=>addAction(a,'REMOVE · '+n.name,()=>{if(confirm('Remove '+n.name+' from the active demo list?')){nominees=nominees.filter(x=>x.id!==n.id);view='admin';render()}},'action danger'));
+ addAction(a,'CANCEL',back,'action back');pageinfo.textContent='Remove nominee preview';
+}
+function renderResults(){
+ const p=el('div','panel');display.appendChild(p);p.append(el('h2','','VOTING RESULTS'),el('p','help','Demo totals from this browser session.'));
+ nominees.forEach(n=>{const total=n.yes+n.no,pct=total?Math.round(n.yes/total*100):0;const r=el('div','resultline');r.append(el('span','',n.name+(n.inducted?' · INDUCTED':'')),el('strong','',`${n.yes} YES · ${n.no} NO · ${pct}%`));p.appendChild(r)});
+ const a=el('div','actions');p.appendChild(a);addAction(a,'BACK',back,'action back');pageinfo.textContent='Results preview';
+}
+function renderInduct(){
+ const p=el('div','panel');display.appendChild(p);p.append(el('h2','','MARK INDUCTED'),el('p','help','Choose a nominee to mark inducted and remove from the active voting pages.'));
+ const a=el('div','actions');p.appendChild(a);nominees.filter(n=>!n.inducted).forEach(n=>addAction(a,'INDUCT · '+n.name,()=>{n.inducted=true;view='admin';render()},'action'));
+ addAction(a,'CANCEL',back,'action back');pageinfo.textContent='Induction preview';
+}
+render();
+</script>
+</body>
+</html>
